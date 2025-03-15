@@ -42,6 +42,10 @@ nltk.download('omw-1.4')
 load_dotenv()
 os.environ['HF_TOKEN'] = os.getenv("HF_TOKEN")
 
+LANGSMITH_API_KEY = st.secrets["LANGSMITH_API_KEY"]
+GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
+HF_TOKEN = st.secrets["HF_TOKEN"]
+
 # Initialize embeddings model
 embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 

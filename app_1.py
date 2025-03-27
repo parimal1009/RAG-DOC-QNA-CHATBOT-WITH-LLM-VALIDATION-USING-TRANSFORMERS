@@ -15,30 +15,13 @@ from dotenv import load_dotenv
 import pickle
 import tempfile
 from datetime import datetime
-import toml
-
-# Load config file
-config_path = os.path.join(os.path.dirname(__file__), "config.toml")
-if os.path.exists(config_path):
-    config = toml.load(config_path)
-    langsmith_api_key = config["general"].get("LANGSMITH_API_KEY", "")
-    hf_token = config["general"].get("HF_TOKEN", "")
-else:
-    st.error("config.toml file is missing!")
-    langsmith_api_key = ""
-    hf_token = ""
-
-# Debugging
-st.write("LangSmith API Key Loaded:", bool(langsmith_api_key))
-st.write("HF Token Loaded:", bool(hf_token))
 
 # Load environment variables
 load_dotenv()
-hf_token = os.getenv("HF_TOKEN", hf_token)  # Use the value from .env if available
+os.environ['HF_TOKEN'] = os.getenv("HF_TOKEN")
 
 # Initialize HuggingFace Embeddings
-embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-
+embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 
 # Streamlit UI Configuration
 st.set_page_config(

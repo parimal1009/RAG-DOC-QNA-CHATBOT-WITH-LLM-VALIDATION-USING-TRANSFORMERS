@@ -13,7 +13,6 @@ from langchain_community.document_loaders import PyPDFLoader
 import os
 import tempfile
 from datetime import datetime
-from transformers.utils import is_transformers_available
 
 # Set environment variables from Streamlit secrets
 os.environ["LANGCHAIN_TRACING_V2"] = st.secrets["LANGSMITH_TRACING"]

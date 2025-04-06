@@ -21,12 +21,8 @@ os.environ["LANGCHAIN_API_KEY"] = st.secrets["LANGSMITH_API_KEY"]
 os.environ["LANGCHAIN_PROJECT"] = st.secrets["LANGSMITH_PROJECT"]
 os.environ["HF_TOKEN"] = st.secrets["HF_TOKEN"]
 
-# Initialize HuggingFace Embeddings with updated parameters
-embeddings = HuggingFaceEmbeddings(
-    model_name="sentence-transformers/all-MiniLM-L6-v2",
-    model_kwargs={'device': 'cpu'},
-    encode_kwargs={'normalize_embeddings': False}
-)
+# Initialize HuggingFace Embeddings
+embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 
 # Streamlit UI Configuration
 st.set_page_config(
@@ -42,15 +38,15 @@ with st.sidebar:
     
     # Model Selection
     model_options = {
-        "Llama3-70b-8192": "Most powerful (slower but higher quality)",
+        "Gemma2-9b-It": "Fast and efficient for most tasks",
         "Llama3-8b-8192": "Balanced performance and context",
-        "Gemma2-9b-It": "Fast and efficient for most tasks"
+        "Llama3-70b-8192": "Most powerful (slower but higher quality)"
     }
     selected_model = st.selectbox(
         "Select Groq Model",
         options=list(model_options.keys()),
         index=0,
-        help=model_options["Llama3-70b-8192"]
+        help=model_options["Gemma2-9b-It"]
     )
     
     # Advanced Options

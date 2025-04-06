@@ -21,8 +21,12 @@ os.environ["LANGCHAIN_API_KEY"] = st.secrets["LANGSMITH_API_KEY"]
 os.environ["LANGCHAIN_PROJECT"] = st.secrets["LANGSMITH_PROJECT"]
 os.environ["HF_TOKEN"] = st.secrets["HF_TOKEN"]
 
-# Initialize HuggingFace Embeddings
-embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+# Initialize HuggingFace Embeddings with error handling
+try:
+    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+except Exception as e:
+    st.error(f"Failed to initialize embeddings: {str(e)}")
+    st.stop()
 
 # Streamlit UI Configuration
 st.set_page_config(
@@ -36,17 +40,17 @@ st.set_page_config(
 with st.sidebar:
     st.title("⚙️ Settings & Configuration")
     
-    # Model Selection
+    # Model Selection with Llama3-70b-8192 as default
     model_options = {
-        "Gemma2-9b-It": "Fast and efficient for most tasks",
+        "Llama3-70b-8192": "Most powerful (slower but higher quality)",
         "Llama3-8b-8192": "Balanced performance and context",
-        "Llama3-70b-8192": "Most powerful (slower but higher quality)"
+        "Gemma2-9b-It": "Fast and efficient for most tasks"
     }
     selected_model = st.selectbox(
         "Select Groq Model",
         options=list(model_options.keys()),
         index=0,
-        help=model_options["Gemma2-9b-It"]
+        help=model_options["Llama3-70b-8192"]
     )
     
     # Advanced Options
@@ -54,7 +58,7 @@ with st.sidebar:
         chunk_size = st.slider("Chunk Size", 1000, 10000, 5000, help="Size of document chunks for processing")
         chunk_overlap = st.slider("Chunk Overlap", 100, 2000, 500, help="Overlap between document chunks")
         temperature = st.slider("Temperature", 0.0, 1.0, 0.3, help="Lower for factual, higher for creative")
-        max_tokens = st.slider("Max Response Tokens", 100, 2000, 500, help="Limit response length")
+        max_tokens = st.slider("Max Response Tokens", 100, 2000, 1000, help="Limit response length")
     
     st.markdown("---")
     st.markdown("### About")
@@ -90,6 +94,7 @@ with col2:
     if st.button("🔄 New Session", help="Start a fresh conversation"):
         session_id = f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         st.session_state.store[session_id] = ChatMessageHistory()
+        st.session_state.messages = []
         st.success(f"New session created: {session_id}")
         st.rerun()
 

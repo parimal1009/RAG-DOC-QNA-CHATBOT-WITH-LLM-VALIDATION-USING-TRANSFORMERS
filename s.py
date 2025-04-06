@@ -21,12 +21,18 @@ os.environ["LANGCHAIN_API_KEY"] = st.secrets["LANGSMITH_API_KEY"]
 os.environ["LANGCHAIN_PROJECT"] = st.secrets["LANGSMITH_PROJECT"]
 os.environ["HF_TOKEN"] = st.secrets["HF_TOKEN"]
 
-# Initialize HuggingFace Embeddings with error handling
+# Initialize HuggingFace Embeddings with error handling and fallback
 try:
+    # Try with the recommended model first
     embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 except Exception as e:
-    st.error(f"Failed to initialize embeddings: {str(e)}")
-    st.stop()
+    st.warning(f"First embedding model failed, trying fallback: {str(e)}")
+    try:
+        # Try with a different model if the first one fails
+        embeddings = HuggingFaceEmbeddings(model_name="BAAI/bge-small-en-v1.5")
+    except Exception as e:
+        st.error(f"Failed to initialize embeddings: {str(e)}")
+        st.stop()
 
 # Streamlit UI Configuration
 st.set_page_config(

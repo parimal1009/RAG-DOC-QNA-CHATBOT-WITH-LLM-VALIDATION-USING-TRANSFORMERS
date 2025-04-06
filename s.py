@@ -13,6 +13,7 @@ from langchain_community.document_loaders import PyPDFLoader
 import os
 import tempfile
 from datetime import datetime
+from transformers.utils import is_transformers_available
 
 # Set environment variables from Streamlit secrets
 os.environ["LANGCHAIN_TRACING_V2"] = st.secrets["LANGSMITH_TRACING"]
@@ -21,7 +22,7 @@ os.environ["LANGCHAIN_API_KEY"] = st.secrets["LANGSMITH_API_KEY"]
 os.environ["LANGCHAIN_PROJECT"] = st.secrets["LANGSMITH_PROJECT"]
 os.environ["HF_TOKEN"] = st.secrets["HF_TOKEN"]
 
-# Initialize HuggingFace Embeddings with BAAI model
+# Initialize HuggingFace Embeddings with error handling
 try:
     embeddings = HuggingFaceEmbeddings(
         model_name="BAAI/bge-small-en-v1.5",

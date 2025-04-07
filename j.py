@@ -11,22 +11,15 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
 import os
+from dotenv import load_dotenv
 import tempfile
 from datetime import datetime
 
-# Set environment variables from Streamlit secrets
-os.environ["LANGCHAIN_TRACING_V2"] = st.secrets["LANGSMITH_TRACING"]
-os.environ["LANGCHAIN_ENDPOINT"] = st.secrets["LANGSMITH_ENDPOINT"]
-os.environ["LANGCHAIN_API_KEY"] = st.secrets["LANGSMITH_API_KEY"]
-os.environ["LANGCHAIN_PROJECT"] = st.secrets["LANGSMITH_PROJECT"]
-os.environ["HF_TOKEN"] = st.secrets["HF_TOKEN"]
+# Load environment variables
+load_dotenv()
 
-# Initialize HuggingFace Embeddings - Changed to bge-small-en-v1.5
-embeddings = HuggingFaceEmbeddings(
-    model_name="BAAI/bge-small-en-v1.5",
-    model_kwargs={'device': 'cpu'},
-    encode_kwargs={'normalize_embeddings': True}
-)
+# Initialize HuggingFace Embeddings
+embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 
 # Streamlit UI Configuration
 st.set_page_config(
@@ -36,31 +29,33 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# Get Groq API key from environment variables or Streamlit secrets
+groq_api_key = os.getenv("GROQ_API_KEY") or st.secrets.get("GROQ_API_KEY")
+
 # Sidebar Configuration
 with st.sidebar:
     st.title("⚙️ Settings & Configuration")
     
-    # API Key Input - Use Streamlit secrets for deployment
-    if 'GROQ_API_KEY' in st.secrets:
-        api_key = st.secrets['GROQ_API_KEY']
-        st.success("API key loaded from secrets!")
+    # Display API key status
+    if groq_api_key:
+        st.success("✅ Groq API key loaded successfully")
     else:
-        api_key = st.text_input("Enter your Groq API key:", type="password", help="Get your API key from Groq's console")
+        st.error("❌ Groq API key not found. Please set GROQ_API_KEY in environment variables or Streamlit secrets.")
     
-    # Model Selection (UNCHANGED)
+    # Model Selection
     model_options = {
-        "mixtral-8x7b-32768": "Best overall performance (recommended)",
-        "llama2-70b-4096": "Good alternative to Mixtral",
-        "gemma-7b-it": "Fast and efficient for simpler tasks"
+        "Gemma2-9b-It": "Fast and efficient for most tasks",
+        "Llama3-8b-8192": "Balanced performance and context",
+        "Llama3-70b-8192": "Most powerful (slower but higher quality)"
     }
     selected_model = st.selectbox(
         "Select Groq Model",
         options=list(model_options.keys()),
         index=0,
-        help=model_options["mixtral-8x7b-32768"]
+        help=model_options["Gemma2-9b-It"]
     )
     
-    # Advanced Options (UNCHANGED)
+    # Advanced Options
     with st.expander("Advanced Options"):
         chunk_size = st.slider("Chunk Size", 1000, 10000, 5000, help="Size of document chunks for processing")
         chunk_overlap = st.slider("Chunk Overlap", 100, 2000, 500, help="Overlap between document chunks")
@@ -77,10 +72,6 @@ with st.sidebar:
     - Export your chat history
     """)
 
-# [REST OF THE CODE REMAINS EXACTLY THE SAME AS IN YOUR ORIGINAL VERSION]
-# Only the embedding model initialization was changed above
-# All other code including the Groq models remains identical
-
 # Main UI
 st.title("🧠 Advanced PDF Chat Assistant")
 st.markdown("""
@@ -94,9 +85,7 @@ if 'store' not in st.session_state:
 if 'vectorstore' not in st.session_state:
     st.session_state.vectorstore = None
 if 'processed_files' not in st.session_state:
-    st.session_state.processed_files = set()
-
-# [CONTINUE WITH THE REST OF YOUR ORIGINAL CODE...]
+    st.session_state.processed_files = []
 
 # Session Management
 col1, col2 = st.columns(2)
@@ -115,7 +104,7 @@ with col2:
 uploaded_files = st.file_uploader("Upload PDF files", type="pdf", accept_multiple_files=True, 
                                  help="Upload one or multiple PDFs to chat with")
 
-if uploaded_files:
+if uploaded_files and st.session_state.vectorstore is None:
     with st.spinner("🔍 Processing and indexing documents..."):
         documents = []
         new_files = [f for f in uploaded_files if f.name not in st.session_state.processed_files]
@@ -133,7 +122,7 @@ if uploaded_files:
                         loader = PyPDFLoader(temp_path)
                         docs = loader.load()
                         documents.extend(docs)
-                        st.session_state.processed_files.add(uploaded_file.name)
+                        st.session_state.processed_files.append(uploaded_file.name)
                     except Exception as e:
                         st.error(f"Error processing {uploaded_file.name}: {str(e)}")
                         continue
@@ -151,10 +140,10 @@ if uploaded_files:
                 st.success(f"✅ Processed {len(documents)} pages from {len(new_files)} files")
 
 # Only proceed if API key is valid and documents are processed
-if api_key and st.session_state.vectorstore:
+if groq_api_key and st.session_state.vectorstore:
     try:
         llm = ChatGroq(
-            groq_api_key=api_key,
+            groq_api_key=groq_api_key,
             model_name=selected_model,
             temperature=temperature,
             max_tokens=max_tokens
@@ -162,9 +151,16 @@ if api_key and st.session_state.vectorstore:
         
         retriever = st.session_state.vectorstore.as_retriever(search_kwargs={"k": 3})
         
-        # Contextual question reformulation prompt
+        # Contextual question reformulation
         contextualize_q_system_prompt = """You are an expert at understanding and refining questions based on conversation history. 
-        Given a chat history and the latest question, rephrase the question to be standalone, or return it as-is if no context is needed."""
+        
+        Your task is to:
+        1. Analyze the chat history and current question
+        2. Identify any implicit context or references
+        3. Reformulate the question to be completely standalone
+        4. Maintain all original intent and nuance
+        5. Never answer the question - only clarify it
+        """
         
         contextualize_q_prompt = ChatPromptTemplate.from_messages([
             ("system", contextualize_q_system_prompt),
@@ -176,17 +172,21 @@ if api_key and st.session_state.vectorstore:
             llm, retriever, contextualize_q_prompt
         )
 
-        # QA System Prompt
+        # QA system prompt
         qa_system_prompt = """You are an expert research assistant with access to document content. Follow these rules:
+
         1. Answer ONLY using the provided context
-        2. Be precise and professional
+        2. Be precise, concise, and professional
         3. If unsure, say "I couldn't find that information in the documents"
-        4. Cite sources with page numbers when possible
-        5. Maintain conversation context from the chat history
+        4. For complex answers, use bullet points
+        5. Always cite sources with page numbers when possible
+        6. Maintain conversation context from the chat history
 
-        Context: {context}
+        Context:
+        {context}
 
-        Current conversation: {chat_history}
+        Current conversation:
+        {chat_history}
 
         Question: {input}
         """
@@ -239,6 +239,7 @@ if api_key and st.session_state.vectorstore:
             with st.chat_message("assistant"):
                 with st.spinner("Thinking..."):
                     try:
+                        session_history = get_session_history(session_id)
                         response = conversational_rag_chain.invoke(
                             {"input": prompt},
                             config={"configurable": {"session_id": session_id}}
@@ -255,7 +256,7 @@ if api_key and st.session_state.vectorstore:
                         if 'context' in response:
                             with st.expander("🔍 Source References"):
                                 for i, doc in enumerate(response['context']):
-                                    source = os.path.basename(doc.metadata.get('source', 'Unknown'))
+                                    source = doc.metadata.get('source', 'Unknown')
                                     page = doc.metadata.get('page', 'N/A')
                                     st.write(f"**Source {i+1}:** {source} (Page {page})")
                                     st.caption(doc.page_content[:300] + "...")
@@ -287,14 +288,18 @@ if api_key and st.session_state.vectorstore:
 
     except Exception as e:
         st.error(f"Error initializing Groq client: {str(e)}")
-elif not api_key:
-    st.warning("Please enter your Groq API key in the sidebar to continue.")
+elif not groq_api_key:
+    st.error("""
+    Groq API key not configured. Please set one of the following:
+    1. Create a `.env` file with `GROQ_API_KEY=your_key_here`
+    2. Set as environment variable
+    3. Configure in Streamlit secrets (for Streamlit Sharing)
+    """)
 elif not st.session_state.vectorstore:
     st.info("Upload and process PDF documents to begin chatting.")
 
 # Footer
 st.markdown("---")
 st.caption("""
-Advanced PDF Chat Assistant | Powered by Groq & LangChain | 
-[Report Issues](https://github.com/your-repo/issues) | [Learn More](https://groq.com/)
+Advanced PDF Chat Assistant | Powered by Groq & LangChain
 """)
